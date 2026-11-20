@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vivienda de Madera | Visor Arquitectónico Interactivo 3D</title>
+  <meta name="description" content="Explorador arquitectónico 3D interactivo con despiece isométrico animado, estudio solar e inspector BIM." />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Import Map para Three.js y Addons (ES Modules CDN) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+    input[type="range"] {
+      accent-color: #3b82f6;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors duration-300">
+
+  <!-- Contenedor Principal del Canvas 3D -->
+  <div id="canvas-container" class="fixed inset-0 w-full h-full z-0"></div>
+
+  <!-- Overlay de Arrastrar y Soltar (Drag & Drop) -->
+  <div id="drop-overlay" class="fixed inset-0 z-50 hidden bg-blue-600/20 backdrop-blur-md border-4 border-dashed border-blue-400 m-4 rounded-3xl flex flex-col items-center justify-center pointer-events-none transition-all">
+    <div class="bg-slate-900/90 text-white p-8 rounded-2xl shadow-2xl text-center max-w-md border border-slate-700">
+      <svg class="w-16 h-16 mx-auto mb-4 text-blue-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+      </svg>
+      <h2 class="text-xl font-bold mb-1">Suelta una nueva versión .GLB</h2>
+      <p class="text-sm text-slate-300">Actualiza la vista al instante sin recargar la página</p>
+    </div>
+  </div>
+
+  <!-- Pantalla de Bienvenida / Carga Inicial (Solo aparece si no existe ./modelo.glb en el repo) -->
+  <div id="welcome-modal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-500 text-xs font-semibold mb-4">
+        <span>GitHub Pages Ready</span>
+        <span>•</span>
+        <span>WebGL / BIM</span>
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight mb-2">Vivienda Unifamiliar en Madera</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+        No se detectó un archivo <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-blue-500 font-mono text-xs">modelo.glb</code> en la raíz del repositorio. Selecciona tu archivo local o arrástralo sobre la ventana para comenzar.
+      </p>
+
+      <label for="file-input-welcome" class="cursor-pointer inline-flex items-center justify-center gap-2.5 w-full sm:w-auto px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/25 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        Abrir archivo .GLB / .GLTF
+      </label>
+      <input id="file-input-welcome" type="file" accept=".glb,.gltf" class="hidden" />
+
+      <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+        <span>Tip: Sube tu archivo como <strong>modelo.glb</strong> al repo</span>
+        <button id="btn-load-demo" class="text-blue-500 hover:text-blue-400 font-medium underline underline-offset-2">
+          Ver pabellón de muestra
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicador de Carga (Spinner) -->
+  <div id="loading-indicator" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-5 rounded-2xl shadow-xl flex items-center gap-4">
+      <div class="w-7 h-7 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div>
+        <p id="loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Cargando arquitectura 3D...</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Preparando materiales PBR y despiece</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra Superior de Navegación del Portafolio -->
+  <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <!-- Identidad del Proyecto + Carga de archivo -->
+    <div class="flex items-center gap-2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 p-1.5 rounded-2xl shadow-lg pointer-events-auto">
+      <button id="btn-info-card-toggle" title="Mostrar/Ocultar ficha del proyecto" class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>
+        <div>
+          <span class="block font-bold text-xs sm:text-sm tracking-tight text-slate-800 dark:text-slate-100 leading-none">Proyecto Residencial</span>
+          <span class="hidden md:block text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Sistema Estructural Timber • BIM 3D</span>
+        </div>
+      </button>
+
+      <div class="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
+
+      <label for="file-input-header" title="Probar otro archivo .GLB desde tu equipo" class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-sm transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        <span class="hidden sm:inline">Cargar .GLB</span>
+      </label>
+      <input id="file-input-header" type="file" accept=".glb,.gltf" class="hidden" />
+    </div>
+
+    <!-- Acciones Principales de Exploración -->
+    <div class="flex items-center gap-1.5 sm:gap-2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 p-1.5 rounded-2xl shadow-lg pointer-events-auto">
+      <!-- Botón Isométrico Explotado Animado -->
+      <button id="btn-explode-toggle" title="Separar o unir los elementos de la vivienda (Isométrico Explotado)" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition-all">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <span>Despiece Isométrico</span>
+      </button>
+
+      <!-- Botón Centrar Cámara -->
+      <button id="btn-center-camera" title="Restablecer encuadre isométrico" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        <span class="hidden lg:inline">Encuadrar</span>
+      </button>
+
+      <!-- Botón Modo Inspección -->
+      <button id="btn-inspect-toggle" title="Activar/Desactivar inspector de elementos Revit" class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+        </svg>
+        <span class="hidden md:inline">Inspector: ON</span>
+      </button>
+
+      <!-- Botón Compartir Enlace (GitHub Pages) -->
+      <button id="btn-share-link" title="Copiar enlace de la página" class="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+        </svg>
+      </button>
+
+      <!-- Botón Alternar Tema Claro/Oscuro -->
+      <button id="btn-theme-toggle" title="Cambiar tema de interfaz" class="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg id="icon-sun" class="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <svg id="icon-moon" class="w-4 h-4 sm:w-5 sm:h-5 text-slate-700 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+
+      <!-- Botón Colapsar Panel Lateral -->
+      <button id="btn-panel-toggle" title="Mostrar/Ocultar herramientas" class="p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Tarjeta Flotante Izquierda: Ficha Arquitectónica y Vistas de Cámara -->
+  <section id="project-info-card" class="fixed top-20 left-3 w-72 max-w-[calc(100vw-1.5rem)] z-10 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-lg transition-all duration-300 hidden md:block">
+    <div class="flex items-start justify-between gap-2 mb-2">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-blue-500">Memoria Descriptiva</span>
+        <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">Vivienda sobre Pilotes y Madera</h2>
+      </div>
+      <button id="btn-close-info-card" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-3">
+      Modelo BIM exportado desde Revit. Explora el sistema estructural de cerchas de madera, cubiertas inclinadas a dos aguas y distribución interior mediante el despiece axonométrico.
+    </p>
+
+    <!-- Presets de Vistas Arquitectónicas -->
+    <div class="pt-2.5 border-t border-slate-200/80 dark:border-slate-800/80">
+      <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Vistas Predefinidas</span>
+      <div class="grid grid-cols-2 gap-1.5 text-xs">
+        <button data-cam-preset="iso" class="cam-preset-btn px-2.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-blue-500/15 hover:text-blue-500 font-medium text-slate-700 dark:text-slate-200 transition-colors text-left">
+          Isométrica
+        </button>
+        <button data-cam-preset="front" class="cam-preset-btn px-2.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-blue-500/15 hover:text-blue-500 font-medium text-slate-700 dark:text-slate-200 transition-colors text-left">
+          Fachada Frontal
+        </button>
+        <button data-cam-preset="side" class="cam-preset-btn px-2.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-blue-500/15 hover:text-blue-500 font-medium text-slate-700 dark:text-slate-200 transition-colors text-left">
+          Elevación Lateral
+        </button>
+        <button data-cam-preset="top" class="cam-preset-btn px-2.5 py-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-blue-500/15 hover:text-blue-500 font-medium text-slate-700 dark:text-slate-200 transition-colors text-left">
+          Vista en Planta
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel Lateral de Controles (Derecha) -->
+  <aside id="controls-panel" class="fixed top-20 right-3 bottom-3 w-80 max-w-[calc(100vw-1.5rem)] z-20 flex flex-col gap-3 overflow-y-auto pr-0.5 transition-transform duration-300 pointer-events-none">
+    
+    <!-- Tarjeta 1: Estadísticas del Modelo e Inspector Revit -->
+    <div class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-lg pointer-events-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Inspector BIM</h2>
+        <span id="badge-file-ext" class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400">GLB</span>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="flex justify-between items-center gap-2">
+          <span class="text-slate-500 dark:text-slate-400">Archivo:</span>
+          <span id="stat-filename" class="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[170px]" title="Ningún archivo cargado">Sin cargar</span>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 pt-1">
+          <div class="bg-slate-100/80 dark:bg-slate-800/80 p-2 rounded-xl">
+            <span class="block text-[10px] text-slate-500 dark:text-slate-400">Mallas</span>
+            <span id="stat-meshes" class="text-xs font-bold text-slate-800 dark:text-slate-100">0</span>
+          </div>
+          <div class="bg-slate-100/80 dark:bg-slate-800/80 p-2 rounded-xl">
+            <span class="block text-[10px] text-slate-500 dark:text-slate-400">Triángulos</span>
+            <span id="stat-triangles" class="text-xs font-bold text-slate-800 dark:text-slate-100">0</span>
+          </div>
+          <div class="bg-slate-100/80 dark:bg-slate-800/80 p-2 rounded-xl">
+            <span class="block text-[10px] text-slate-500 dark:text-slate-400">Texturas</span>
+            <span id="stat-textures" class="text-xs font-bold text-emerald-600 dark:text-emerald-400">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caja del Elemento Seleccionado (Inspector Revit) -->
+      <div class="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-800/80">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Elemento Seleccionado</span>
+          <button id="btn-clear-selection" class="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hidden">Limpiar</button>
+        </div>
+        <div id="selected-node-box" class="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 text-xs font-mono text-slate-700 dark:text-slate-200 break-words border border-slate-200/60 dark:border-slate-700/60">
+          Haz clic sobre cualquier elemento del modelo 3D para inspeccionarlo.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tarjeta 2: Iluminación Solar e IBL -->
+    <div class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-lg pointer-events-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Estudio Solar e Iluminación</h2>
+        <button id="btn-reset-sun" class="text-[11px] font-medium text-blue-500 hover:underline">Restablecer</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <div class="flex justify-between mb-1">
+            <label for="slider-azimuth" class="font-medium text-slate-700 dark:text-slate-300">Azimut (Orientación)</label>
+            <span id="val-azimuth" class="font-mono font-semibold text-blue-500">45°</span>
+          </div>
+          <input id="slider-azimuth" type="range" min="0" max="360" value="45" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+        </div>
+
+        <div>
+          <div class="flex justify-between mb-1">
+            <label for="slider-elevation" class="font-medium text-slate-700 dark:text-slate-300">Elevación (Altura del sol)</label>
+            <span id="val-elevation" class="font-mono font-semibold text-blue-500">50°</span>
+          </div>
+          <input id="slider-elevation" type="range" min="5" max="90" value="50" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+        </div>
+
+        <div>
+          <div class="flex justify-between mb-1">
+            <label for="slider-intensity" class="font-medium text-slate-700 dark:text-slate-300">Intensidad Luz Solar</label>
+            <span id="val-intensity" class="font-mono font-semibold text-blue-500">1.8</span>
+          </div>
+          <input id="slider-intensity" type="range" min="0" max="5" step="0.1" value="1.8" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+        </div>
+
+        <div>
+          <div class="flex justify-between mb-1">
+            <label for="slider-env-intensity" class="font-medium text-slate-700 dark:text-slate-300">Luz de Entorno PBR (IBL)</label>
+            <span id="val-env-intensity" class="font-mono font-semibold text-blue-500">1.0</span>
+          </div>
+          <input id="slider-env-intensity" type="range" min="0" max="2.5" step="0.1" value="1.0" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+        </div>
+
+        <div>
+          <div class="flex justify-between mb-1">
+            <label for="slider-exposure" class="font-medium text-slate-700 dark:text-slate-300">Exposición (Tone Mapping)</label>
+            <span id="val-exposure" class="font-mono font-semibold text-blue-500">1.0</span>
+          </div>
+          <input id="slider-exposure" type="range" min="0.4" max="2.0" step="0.05" value="1.0" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Tarjeta 3: Modos de Visualización y Entorno -->
+    <div class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-lg pointer-events-auto">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Materiales y Visualización</h2>
+
+      <div class="grid grid-cols-3 gap-1.5 mb-3">
+        <button data-render-mode="textured" class="render-mode-btn p-2 rounded-xl border-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-semibold text-center transition-all">
+          Texturas
+        </button>
+        <button data-render-mode="clay" class="render-mode-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 text-[11px] font-medium text-center transition-all">
+          Maqueta
+        </button>
+        <button data-render-mode="wireframe" class="render-mode-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 text-[11px] font-medium text-center transition-all">
+          Alambre
+        </button>
+      </div>
+
+      <!-- Control de Factor de Explosión Isométrica -->
+      <div class="mb-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/25">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-xs font-bold text-indigo-600 dark:text-indigo-300">Isométrico Explotado</span>
+          <button id="btn-explode-panel" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shadow-sm transition-all">
+            Activar Despiece
+          </button>
+        </div>
+        <div class="flex justify-between items-center mb-1 text-xs">
+          <label for="slider-explode-factor" class="font-medium text-slate-600 dark:text-slate-300">Amplitud de separación</label>
+          <span id="val-explode-factor" class="font-mono font-semibold text-indigo-600 dark:text-indigo-400">1.0x</span>
+        </div>
+        <input id="slider-explode-factor" type="range" min="0.4" max="2.5" step="0.1" value="1.0" class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+      </div>
+
+      <!-- Interruptores -->
+      <div class="space-y-2 text-xs mb-4">
+        <label class="flex items-center justify-between p-2 rounded-xl bg-slate-100/70 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+          <span class="font-medium text-slate-700 dark:text-slate-200">Forzar Doble Cara (Revit)</span>
+          <input id="toggle-doubleside" type="checkbox" class="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+        </label>
+
+        <label class="flex items-center justify-between p-2 rounded-xl bg-slate-100/70 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+          <span class="font-medium text-slate-700 dark:text-slate-200">Mostrar Cuadrícula Base</span>
+          <input id="toggle-grid" type="checkbox" checked class="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+        </label>
+
+        <label class="flex items-center justify-between p-2 rounded-xl bg-slate-100/70 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+          <span class="font-medium text-slate-700 dark:text-slate-200">Sombras Proyectadas</span>
+          <input id="toggle-shadows" type="checkbox" checked class="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+        </label>
+      </div>
+
+      <!-- Presets de Fondo -->
+      <div>
+        <span class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Fondo de Escena</span>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-bg="dark" class="bg-preset-btn active-preset flex flex-col items-center gap-1 p-2 rounded-xl border-2 border-blue-500 bg-slate-900 text-white text-[11px] font-medium transition-all">
+            <span class="w-4 h-4 rounded-full bg-slate-950 border border-slate-600"></span>
+            Estudio Oscuro
+          </button>
+          <button data-bg="sky" class="bg-preset-btn flex flex-col items-center gap-1 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-sky-100 text-slate-800 text-[11px] font-medium transition-all">
+            <span class="w-4 h-4 rounded-full bg-sky-300 border border-sky-400"></span>
+            Cielo Claro
+          </button>
+          <button data-bg="white" class="bg-preset-btn flex flex-col items-center gap-1 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white text-slate-800 text-[11px] font-medium transition-all">
+            <span class="w-4 h-4 rounded-full bg-slate-50 border border-slate-300"></span>
+            Blanco Técnico
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Barra Inferior de Ayuda / Controles de Navegación -->
+  <footer class="fixed bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 px-3.5 py-2 rounded-2xl text-[11px] text-slate-600 dark:text-slate-400 shadow-md pointer-events-none">
+    <span><strong class="text-slate-800 dark:text-slate-200">Clic Izq:</strong> Orbitar</span>
+    <span>•</span>
+    <span><strong class="text-slate-800 dark:text-slate-200">Clic Der:</strong> Desplazar</span>
+    <span>•</span>
+    <span><strong class="text-slate-800 dark:text-slate-200">Rueda:</strong> Zoom</span>
+    <span>•</span>
+    <span><strong class="text-amber-500">Clic en objeto:</strong> Inspeccionar BIM</span>
+  </footer>
+
+  <!-- Contenedor de Notificaciones Toast -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Lógica Principal Three.js (ES Module) -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // ==========================================
+    // 0. CONFIGURACIÓN DEL REPOSITORIO GITHUB
+    // ==========================================
+    // Si subes tu modelo exportado de Revit como "modelo.glb" junto a este index.html,
+    // la página lo cargará automáticamente al abrirse en GitHub Pages.
+    const DEFAULT_REPO_MODEL_URL = './modelo.glb';
+
+    // ==========================================
+    // 1. VARIABLES GLOBALES Y ESTADO
+    // ==========================================
+    let scene, camera, renderer, controls, envTexture;
+    let sunLight, hemiLight, ambientLight, shadowCatcherPlane, gridHelper;
+    let loadedModel = null;
+    let modelCenter = new THREE.Vector3(0, 0, 0);
+    let modelRadius = 10;
+    let currentRenderMode = 'textured';
+
+    const originalMaterialsMap = new WeakMap();
+    const originalSideMap = new WeakMap();
+    const clayMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf1f5f9,
+      roughness: 0.78,
+      metalness: 0.05,
+    });
+
+    // Estado de inspección (Raycasting)
+    let inspectMode = true;
+    let selectedMesh = null;
+    let originalEmissiveMap = new WeakMap();
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let pointerDownPos = { x: 0, y: 0 };
+
+    // Estado de Isométrico Explotado Animado
+    let isExploded = false;
+    let explodeProgress = 0;
+    let explodeTarget = 0;
+    let explodeScaleMultiplier = 1.0;
+    let explodedEntries = [];
+
+    // Referencias DOM
+    const container = document.getElementById('canvas-container');
+    const welcomeModal = document.getElementById('welcome-modal');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const dropOverlay = document.getElementById('drop-overlay');
+
+    // ==========================================
+    // 2. SISTEMA DE NOTIFICACIONES
+    // ==========================================
+    function showToast(message, type = 'info') {
+      const toastContainer = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        info: 'bg-slate-900 text-white border-slate-700',
+        success: 'bg-emerald-600 text-white border-emerald-500',
+        error: 'bg-rose-600 text-white border-rose-500',
+      };
+      toast.className = `px-4 py-3 rounded-xl border shadow-xl text-xs font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3800);
+    }
+
+    // ==========================================
+    // 3. INICIALIZACIÓN DE ESCENA THREE.JS
+    // ==========================================
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b0f19);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera.position.set(18, 14, 18);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      container.appendChild(renderer.domElement);
+
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+      envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = envTexture;
+      scene.environmentIntensity = 1.0;
+      pmremGenerator.dispose();
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.screenSpacePanning = true;
+      controls.maxPolarAngle = Math.PI * 0.495;
+      controls.minDistance = 0.2;
+      controls.maxDistance = 1000;
+
+      ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+      scene.add(ambientLight);
+
+      hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x475569, 0.45);
+      hemiLight.position.set(0, 50, 0);
+      scene.add(hemiLight);
+
+      sunLight = new THREE.DirectionalLight(0xfffbeb, 1.8);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 0.5;
+      sunLight.shadow.camera.far = 250;
+      const d = 30;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.0005;
+      sunLight.shadow.normalBias = 0.02;
+      scene.add(sunLight);
+      scene.add(sunLight.target);
+
+      gridHelper = new THREE.GridHelper(60, 60, 0x3b82f6, 0x334155);
+      gridHelper.material.opacity = 0.35;
+      gridHelper.material.transparent = true;
+      scene.add(gridHelper);
+
+      const planeGeo = new THREE.PlaneGeometry(500, 500);
+      const planeMat = new THREE.ShadowMaterial({ opacity: 0.28 });
+      shadowCatcherPlane = new THREE.Mesh(planeGeo, planeMat);
+      shadowCatcherPlane.rotation.x = -Math.PI / 2;
+      shadowCatcherPlane.position.y = -0.002;
+      shadowCatcherPlane.receiveShadow = true;
+      scene.add(shadowCatcherPlane);
+
+      updateSunPosition();
+
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+      renderer.domElement.addEventListener('pointerup', onPointerUp);
+    }
+
+    // ==========================================
+    // 4. ACTUALIZACIÓN DE POSICIÓN SOLAR
+    // ==========================================
+    function updateSunPosition() {
+      const azimuthDeg = parseFloat(document.getElementById('slider-azimuth').value);
+      const elevationDeg = parseFloat(document.getElementById('slider-elevation').value);
+      const intensity = parseFloat(document.getElementById('slider-intensity').value);
+
+      document.getElementById('val-azimuth').textContent = `${azimuthDeg}°`;
+      document.getElementById('val-elevation').textContent = `${elevationDeg}°`;
+      document.getElementById('val-intensity').textContent = intensity.toFixed(1);
+
+      const azRad = THREE.MathUtils.degToRad(azimuthDeg);
+      const elRad = THREE.MathUtils.degToRad(elevationDeg);
+      const distance = Math.max(modelRadius * 2.5, 40);
+
+      const x = modelCenter.x + distance * Math.cos(elRad) * Math.sin(azRad);
+      const y = modelCenter.y + distance * Math.sin(elRad);
+      const z = modelCenter.z + distance * Math.cos(elRad) * Math.cos(azRad);
+
+      sunLight.position.set(x, y, z);
+      sunLight.target.position.copy(modelCenter);
+      sunLight.target.updateMatrixWorld();
+      sunLight.intensity = intensity;
+    }
+
+    // ==========================================
+    // 5. CARGA DE MODELO (DESDE URL O ARCHIVO LOCAL)
+    // ==========================================
+    function loadGLBFromURL(url, displayName, isAutoRepoLoad = false) {
+      loadingIndicator.classList.remove('hidden');
+      loadingIndicator.classList.add('flex');
+
+      const loader = new GLTFLoader();
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+      loader.setDRACOLoader(dracoLoader);
+
+      loader.load(
+        url,
+        (gltf) => {
+          clearSelection();
+          if (loadedModel) {
+            scene.remove(loadedModel);
+          }
+
+          loadedModel = gltf.scene;
+          let meshCount = 0;
+          let triangleCount = 0;
+          const uniqueTextures = new Set();
+          const shadowsEnabled = document.getElementById('toggle-shadows').checked;
+          const forceDoubleSide = document.getElementById('toggle-doubleside').checked;
+
+          loadedModel.traverse((child) => {
+            if (child.isMesh) {
+              meshCount++;
+              child.castShadow = shadowsEnabled;
+              child.receiveShadow = shadowsEnabled;
+
+              const geom = child.geometry;
+              if (geom) {
+                if (geom.index) {
+                  triangleCount += geom.index.count / 3;
+                } else if (geom.attributes.position) {
+                  triangleCount += geom.attributes.position.count / 3;
+                }
+              }
+
+              originalMaterialsMap.set(child, child.material);
+
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach((mat) => {
+                if (!mat) return;
+
+                if (!originalSideMap.has(mat)) {
+                  originalSideMap.set(mat, mat.side);
+                }
+                if (forceDoubleSide) {
+                  mat.side = THREE.DoubleSide;
+                }
+
+                if (mat.map) {
+                  mat.map.colorSpace = THREE.SRGBColorSpace;
+                  mat.map.needsUpdate = true;
+                  uniqueTextures.add(mat.map.uuid);
+                }
+                if (mat.emissiveMap) {
+                  mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+                  mat.emissiveMap.needsUpdate = true;
+                  uniqueTextures.add(mat.emissiveMap.uuid);
+                }
+                if (mat.normalMap) uniqueTextures.add(mat.normalMap.uuid);
+                if (mat.roughnessMap) uniqueTextures.add(mat.roughnessMap.uuid);
+                if (mat.metalnessMap) uniqueTextures.add(mat.metalnessMap.uuid);
+                if (mat.aoMap) uniqueTextures.add(mat.aoMap.uuid);
+
+                if (mat.transparent && mat.opacity < 0.98) {
+                  mat.depthWrite = false;
+                }
+
+                mat.envMapIntensity = parseFloat(document.getElementById('slider-env-intensity').value);
+                mat.needsUpdate = true;
+              });
+            }
+          });
+
+          scene.add(loadedModel);
+          applyRenderMode(currentRenderMode);
+          frameModel(loadedModel);
+          prepareExplodedViewData(loadedModel);
+
+          const ext = displayName.split('.').pop().toUpperCase() || 'GLB';
+          document.getElementById('stat-filename').textContent = displayName;
+          document.getElementById('stat-filename').title = displayName;
+          document.getElementById('badge-file-ext').textContent = ext;
+          document.getElementById('stat-meshes').textContent = meshCount.toLocaleString('es-ES');
+          document.getElementById('stat-triangles').textContent = Math.round(triangleCount).toLocaleString('es-ES');
+          document.getElementById('stat-textures').textContent = uniqueTextures.size.toLocaleString('es-ES');
+
+          welcomeModal.classList.add('hidden');
+          welcomeModal.classList.remove('flex');
+          loadingIndicator.classList.add('hidden');
+          loadingIndicator.classList.remove('flex');
+
+          if (!isAutoRepoLoad) {
+            URL.revokeObjectURL(url);
+            showToast(`Modelo "${displayName}" cargado (${uniqueTextures.size} texturas PBR)`, 'success');
+          } else {
+            showToast(`Proyecto cargado desde el repositorio (${displayName})`, 'success');
+          }
+        },
+        undefined,
+        (error) => {
+          loadingIndicator.classList.add('hidden');
+          loadingIndicator.classList.remove('flex');
+
+          if (isAutoRepoLoad) {
+            // Si aún no se ha subido modelo.glb al repositorio de GitHub, mostrar modal de carga local
+            welcomeModal.classList.remove('hidden');
+            welcomeModal.classList.add('flex');
+          } else {
+            URL.revokeObjectURL(url);
+            console.error('Error al cargar GLB/GLTF:', error);
+            showToast('Error al leer el archivo 3D. Verifica que no esté dañado.', 'error');
+          }
+        }
+      );
+    }
+
+    function loadGLBFile(file) {
+      if (!file) return;
+      const fileName = file.name;
+      const ext = fileName.split('.').pop().toLowerCase();
+
+      if (ext !== 'glb' && ext !== 'gltf') {
+        showToast('Formato no válido. Por favor selecciona un archivo .GLB o .GLTF', 'error');
+        return;
+      }
+
+      const objectURL = URL.createObjectURL(file);
+      loadGLBFromURL(objectURL, fileName, false);
+    }
+
+    // ==========================================
+    // 5B. MODOS DE RENDERIZADO
+    // ==========================================
+    function applyRenderMode(mode) {
+      currentRenderMode = mode;
+
+      document.querySelectorAll('.render-mode-btn').forEach((btn) => {
+        const isActive = btn.dataset.renderMode === mode;
+        if (isActive) {
+          btn.className = 'render-mode-btn p-2 rounded-xl border-2 border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-semibold text-center transition-all';
+        } else {
+          btn.className = 'render-mode-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 text-[11px] font-medium text-center transition-all';
+        }
+      });
+
+      if (!loadedModel) return;
+
+      const forceDouble = document.getElementById('toggle-doubleside').checked;
+      clayMaterial.side = forceDouble ? THREE.DoubleSide : THREE.FrontSide;
+      clayMaterial.wireframe = false;
+
+      loadedModel.traverse((child) => {
+        if (!child.isMesh) return;
+        const origMat = originalMaterialsMap.get(child);
+
+        if (mode === 'clay') {
+          child.material = clayMaterial;
+        } else {
+          if (origMat) {
+            child.material = origMat;
+          }
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => {
+            if (!m) return;
+            m.wireframe = mode === 'wireframe';
+            m.side = forceDouble ? THREE.DoubleSide : (originalSideMap.get(m) ?? THREE.FrontSide);
+            m.needsUpdate = true;
+          });
+        }
+      });
+    }
+
+    // ==========================================
+    // 5C. ISOMÉTRICO EXPLOTADO (CONFIGURACIÓN ESTABLE)
+    // ==========================================
+    function isAnchoredBaseElement(fullName, meshBox, siteFloorMaxY) {
+      const anchoredRegex = /(toposolid|topograf|terreno|césped|cesped|grama|grass|pasto|calle|road|street|asfalto|pavimento|acera|sidewalk|vereda|banqueta|andén|anden|bordillo|curb|cimiento|kings|fundaci|zapata|foundation|footing|exterior_site)/i;
+      if (anchoredRegex.test(fullName)) return true;
+
+      if (meshBox && siteFloorMaxY !== null && /(suelo|floor|losa|slab)/i.test(fullName)) {
+        if (meshBox.max.y <= siteFloorMaxY + 0.08) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function getFullHierarchyName(obj) {
+      const names = [];
+      let curr = obj;
+      while (curr && curr !== loadedModel) {
+        if (curr.name) names.push(curr.name);
+        curr = curr.parent;
+      }
+      if (obj.isMesh && obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => {
+          if (m && m.name) names.push(m.name);
+        });
+      }
+      return names.join(' | ');
+    }
+
+    function getCardinalHorizontalDirection(objCenter, houseCenter, houseSize) {
+      const dx = (objCenter.x - houseCenter.x) / Math.max(houseSize.x * 0.5, 0.5);
+      const dz = (objCenter.z - houseCenter.z) / Math.max(houseSize.z * 0.5, 0.5);
+
+      if (Math.abs(dx) < 0.08 && Math.abs(dz) < 0.08) {
+        return new THREE.Vector3(0, 0, 0);
+      }
+      if (Math.abs(dx) >= Math.abs(dz)) {
+        return new THREE.Vector3(Math.sign(dx), 0, 0);
+      } else {
+        return new THREE.Vector3(0, 0, Math.sign(dz));
+      }
+    }
+
+    function prepareExplodedViewData(root) {
+      isExploded = false;
+      explodeProgress = 0;
+      explodeTarget = 0;
+      explodedEntries = [];
+      updateExplodeButtonUI();
+
+      if (!root) return;
+      root.updateMatrixWorld(true);
+
+      let siteFloorMaxY = null;
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+        const name = getFullHierarchyName(child);
+        if (/(toposolid|calle|road|street|terreno|césped|cesped|grass)/i.test(name)) {
+          const b = new THREE.Box3().setFromObject(child);
+          if (!b.isEmpty()) {
+            siteFloorMaxY = siteFloorMaxY === null ? b.max.y : Math.max(siteFloorMaxY, b.max.y);
+          }
+        }
+      });
+
+      const houseBox = new THREE.Box3();
+      const houseMeshes = [];
+
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+        const fullName = getFullHierarchyName(child);
+        const mBox = new THREE.Box3().setFromObject(child);
+        if (!mBox.isEmpty() && !isAnchoredBaseElement(fullName, mBox, siteFloorMaxY)) {
+          houseMeshes.push({ mesh: child, fullName, box: mBox });
+          houseBox.union(mBox);
+        }
+      });
+
+      if (houseBox.isEmpty() || houseMeshes.length === 0) return;
+
+      const houseCenter = houseBox.getCenter(new THREE.Vector3());
+      const houseSize = houseBox.getSize(new THREE.Vector3());
+      const houseHeight = Math.max(houseSize.y, 2.5);
+      const baseSpan = Math.max(Math.min(houseSize.x, houseSize.z), 4.0);
+
+      houseMeshes.forEach(({ mesh, fullName, box }) => {
+        const objCenter = box.getCenter(new THREE.Vector3());
+        const normY = THREE.MathUtils.clamp((objCenter.y - houseBox.min.y) / houseHeight, 0, 1);
+        const isLowerFloorZone = box.max.y <= houseBox.min.y + houseHeight * 0.28;
+        const cardinalDir = getCardinalHorizontalDirection(objCenter, houseCenter, houseSize);
+
+        let worldOffset = new THREE.Vector3(0, 0, 0);
+
+        if (/(suelo|floor|parquet|losa|slab|terraz|porche|deck|borde|viga de borde)/i.test(fullName) || isLowerFloorZone) {
+          worldOffset.set(0, 0, 0);
+        } else if (/(cubierta|roof|techo|teja|imposta|fascia|canaleta|canoa|gutter)/i.test(fullName)) {
+          worldOffset.set(0, houseHeight * 0.85, 0);
+        } else if (/(puerta|door|ventana|window|marco|frame|hoja|pivot)/i.test(fullName)) {
+          worldOffset.copy(cardinalDir).multiplyScalar(baseSpan * 0.85);
+        } else if (/(mueble|furniture|sofa|sofá|cama|mesa|silla|escritorio|estante|armario|cocina|duravit|roca|elkay|sanitar|inodoro|lavamanos|ducha|shower|mampara|luminaria|interruptor)/i.test(fullName)) {
+          worldOffset.copy(cardinalDir).multiplyScalar(baseSpan * 0.32);
+        } else if (/(muro|wall|tabique|pared|revestimiento)/i.test(fullName)) {
+          worldOffset.copy(cardinalDir).multiplyScalar(baseSpan * 0.60);
+        } else if (/(tuber|pipe|bajante|pluvial|registro|trampa)/i.test(fullName)) {
+          worldOffset.copy(cardinalDir).multiplyScalar(baseSpan * 0.72);
+        } else if (/(soporte|can|mensula|ménsula|riostra|bracket|brace|pie de amigo)/i.test(fullName)) {
+          worldOffset.set(0, houseHeight * 0.30, 0);
+        } else if (/(timber|cercha|viga|armadura|truss|rafter|correa|purlin|estructura|madera|pilar|poste|column|montante|solera)/i.test(fullName)) {
+          worldOffset.set(0, houseHeight * 0.56, 0);
+        } else {
+          if (normY > 0.55) {
+            worldOffset.set(0, houseHeight * 0.56, 0);
+          } else {
+            worldOffset.copy(cardinalDir).multiplyScalar(baseSpan * 0.42);
+          }
+        }
+
+        let localOffset = worldOffset.clone();
+        if (mesh.parent) {
+          const parentWorldQuat = new THREE.Quaternion();
+          const parentWorldScale = new THREE.Vector3();
+          mesh.parent.getWorldQuaternion(parentWorldQuat);
+          mesh.parent.getWorldScale(parentWorldScale);
+
+          localOffset.applyQuaternion(parentWorldQuat.invert());
+          localOffset.divide(parentWorldScale);
+        }
+
+        explodedEntries.push({
+          obj: mesh,
+          originalPos: mesh.position.clone(),
+          offset: localOffset,
+        });
+      });
+    }
+
+    function updateExplodeButtonUI() {
+      const btnHeader = document.getElementById('btn-explode-toggle');
+      const btnPanel = document.getElementById('btn-explode-panel');
+
+      if (btnHeader) {
+        const label = btnHeader.querySelector('span');
+        if (isExploded) {
+          btnHeader.className = 'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 text-white shadow-md shadow-indigo-600/25 hover:bg-indigo-500 transition-all';
+          if (label) label.textContent = 'Unir Vivienda';
+        } else {
+          btnHeader.className = 'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition-all';
+          if (label) label.textContent = 'Despiece Isométrico';
+        }
+      }
+
+      if (btnPanel) {
+        if (isExploded) {
+          btnPanel.textContent = 'Unir Modelo';
+          btnPanel.className = 'px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold shadow-sm transition-all';
+        } else {
+          btnPanel.textContent = 'Activar Despiece';
+          btnPanel.className = 'px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shadow-sm transition-all';
+        }
+      }
+    }
+
+    function toggleExplodedView() {
+      if (!loadedModel || explodedEntries.length === 0) {
+        showToast('Carga primero un modelo para activar el isométrico explotado.', 'info');
+        return;
+      }
+      isExploded = !isExploded;
+      explodeTarget = isExploded ? 1 : 0;
+      updateExplodeButtonUI();
+    }
+
+    function applyExplodedPositions(t) {
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const factor = eased * explodeScaleMultiplier;
+
+      for (let i = 0; i < explodedEntries.length; i++) {
+        const entry = explodedEntries[i];
+        entry.obj.position.copy(entry.originalPos).addScaledVector(entry.offset, factor);
+      }
+    }
+
+    // ==========================================
+    // 6. ENCUADRE AUTOMÁTICO Y VISTAS DE CÁMARA
+    // ==========================================
+    function frameModel(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      if (box.isEmpty()) return;
+
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      const yOffset = -box.min.y;
+      object.position.y += yOffset;
+
+      box.setFromObject(object);
+      box.getCenter(center);
+      modelCenter.copy(center);
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      modelRadius = maxDim * 0.5 || 5;
+
+      const shadowCamSize = Math.max(maxDim * 1.1, 15);
+      sunLight.shadow.camera.left = -shadowCamSize;
+      sunLight.shadow.camera.right = shadowCamSize;
+      sunLight.shadow.camera.top = shadowCamSize;
+      sunLight.shadow.camera.bottom = -shadowCamSize;
+      sunLight.shadow.camera.far = Math.max(maxDim * 6, 150);
+      sunLight.shadow.camera.updateProjectionMatrix();
+
+      camera.near = Math.max(maxDim / 1000, 0.05);
+      camera.far = Math.max(maxDim * 30, 1000);
+      camera.updateProjectionMatrix();
+
+      scene.remove(gridHelper);
+      const gridSize = Math.ceil(maxDim * 2.5 / 10) * 10 || 40;
+      const divisions = Math.min(Math.max(gridSize, 20), 100);
+      gridHelper = new THREE.GridHelper(gridSize, divisions, 0x3b82f6, 0x64748b);
+      gridHelper.material.opacity = 0.3;
+      gridHelper.material.transparent = true;
+      gridHelper.visible = document.getElementById('toggle-grid').checked;
+      scene.add(gridHelper);
+
+      updateSunPosition();
+      centerCameraView();
+    }
+
+    function centerCameraView() {
+      setCameraPreset('iso');
+    }
+
+    function setCameraPreset(preset) {
+      const dist = modelRadius * 2.4;
+      let offset = new THREE.Vector3(dist * 0.85, dist * 0.65, dist * 0.85);
+
+      if (preset === 'front') {
+        offset.set(0, dist * 0.25, dist * 1.15);
+      } else if (preset === 'side') {
+        offset.set(dist * 1.15, dist * 0.25, 0);
+      } else if (preset === 'top') {
+        offset.set(0.01, dist * 1.4, 0.01);
+      }
+
+      camera.position.copy(modelCenter).add(offset);
+      controls.target.copy(modelCenter);
+      controls.update();
+    }
+
+    // ==========================================
+    // 7. INSPECTOR DE ELEMENTOS REVIT (RAYCASTING)
+    // ==========================================
+    function onPointerDown(event) {
+      pointerDownPos.x = event.clientX;
+      pointerDownPos.y = event.clientY;
+    }
+
+    function onPointerUp(event) {
+      if (!inspectMode || !loadedModel) return;
+
+      const dx = event.clientX - pointerDownPos.x;
+      const dy = event.clientY - pointerDownPos.y;
+      if (Math.hypot(dx, dy) > 5) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(loadedModel, true);
+
+      if (intersects.length > 0) {
+        const hitMesh = intersects[0].object;
+        highlightMesh(hitMesh);
+
+        const nodeName = getRevitNodeName(hitMesh);
+        const box = document.getElementById('selected-node-box');
+        box.textContent = nodeName;
+        box.classList.add('border-amber-500', 'bg-amber-500/10');
+        document.getElementById('btn-clear-selection').classList.remove('hidden');
+      } else {
+        clearSelection();
+      }
+    }
+
+    function getRevitNodeName(obj) {
+      let current = obj;
+      const hierarchy = [];
+      while (current && current !== loadedModel) {
+        if (current.name && current.name.trim() !== '') {
+          hierarchy.push(current.name.trim());
+        }
+        current = current.parent;
+      }
+      if (hierarchy.length === 0) return 'Elemento sin nombre (Mesh)';
+      if (hierarchy.length > 1 && /^mesh/i.test(hierarchy[0])) {
+        return `${hierarchy[1]} (${hierarchy[0]})`;
+      }
+      return hierarchy[0];
+    }
+
+    function highlightMesh(mesh) {
+      restorePreviousMeshMaterial();
+      selectedMesh = mesh;
+
+      if (!mesh.material) return;
+      if (!mesh.userData._isClonedMaterial) {
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map((m) => m.clone())
+          : mesh.material.clone();
+        mesh.userData._isClonedMaterial = true;
+      }
+
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach((mat) => {
+        if (mat.emissive) {
+          originalEmissiveMap.set(mat, mat.emissive.clone());
+          mat.emissive.setHex(0xd97706);
+          mat.emissiveIntensity = 0.45;
+        }
+      });
+    }
+
+    function restorePreviousMeshMaterial() {
+      if (!selectedMesh || !selectedMesh.material) return;
+      const mats = Array.isArray(selectedMesh.material) ? selectedMesh.material : [selectedMesh.material];
+      mats.forEach((mat) => {
+        if (mat.emissive && originalEmissiveMap.has(mat)) {
+          mat.emissive.copy(originalEmissiveMap.get(mat));
+          mat.emissiveIntensity = 1.0;
+        }
+      });
+      selectedMesh = null;
+    }
+
+    function clearSelection() {
+      restorePreviousMeshMaterial();
+      const box = document.getElementById('selected-node-box');
+      box.textContent = 'Haz clic sobre cualquier elemento del modelo 3D para inspeccionarlo.';
+      box.classList.remove('border-amber-500', 'bg-amber-500/10');
+      document.getElementById('btn-clear-selection').classList.add('hidden');
+    }
+
+    // ==========================================
+    // 8. MODELO DE PRUEBA PROCEDURAL (PABELLÓN)
+    // ==========================================
+    function loadDemoModel() {
+      clearSelection();
+      if (loadedModel) scene.remove(loadedModel);
+
+      const group = new THREE.Group();
+      group.name = 'Pabellon_Arquitectonico_Demo';
+
+      const concreteMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.85 });
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.65 });
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x93c5fd,
+        transparent: true,
+        opacity: 0.45,
+        roughness: 0.1,
+        metalness: 0.1,
+      });
+
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(12, 0.3, 8), concreteMat);
+      slab.name = 'Suelo: Con parquet - 30 cm';
+      slab.position.set(0, 0.15, 0);
+      group.add(slab);
+
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(11.6, 3.2, 0.25), concreteMat);
+      backWall.name = 'Muro básico: Por defecto - 25 cm';
+      backWall.position.set(0, 1.9, -3.7);
+      group.add(backWall);
+
+      const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.2, 7.6), concreteMat);
+      sideWall.name = 'Muro básico: Concreto visto - 25 cm';
+      sideWall.position.set(-5.67, 1.9, 0);
+      group.add(sideWall);
+
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(10.8, 3.0, 0.08), glassMat);
+      glass.name = 'Ventana: Vidrio Templado 10mm';
+      glass.position.set(0.2, 1.8, 3.5);
+      group.add(glass);
+
+      for (let i = -5; i <= 5; i += 1.25) {
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.28, 8.8), woodMat);
+        beam.name = `Viga de madera: Timber 11x28cm [ID_${Math.round(i + 10)}]`;
+        beam.position.set(i, 3.65, 0);
+        group.add(beam);
+      }
+
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.2, 9.0), concreteMat);
+      roof.name = 'Cubierta básica: Losa plana - 20 cm';
+      roof.position.set(0, 3.89, 0);
+      group.add(roof);
+
+      let meshes = 0;
+      let tris = 0;
+      group.traverse((c) => {
+        if (c.isMesh) {
+          meshes++;
+          c.castShadow = true;
+          c.receiveShadow = true;
+          tris += c.geometry.index ? c.geometry.index.count / 3 : 12;
+        }
+      });
+
+      loadedModel = group;
+      scene.add(loadedModel);
+      loadedModel.traverse((c) => {
+        if (c.isMesh) {
+          originalMaterialsMap.set(c, c.material);
+          originalSideMap.set(c.material, c.material.side);
+        }
+      });
+      applyRenderMode(currentRenderMode);
+      frameModel(loadedModel);
+      prepareExplodedViewData(loadedModel);
+
+      document.getElementById('stat-filename').textContent = 'Pabellon_Demo.glb';
+      document.getElementById('badge-file-ext').textContent = 'DEMO';
+      document.getElementById('stat-meshes').textContent = meshes;
+      document.getElementById('stat-triangles').textContent = tris;
+      document.getElementById('stat-textures').textContent = '0';
+      welcomeModal.classList.add('hidden');
+      welcomeModal.classList.remove('flex');
+      showToast('Pabellón de muestra cargado.', 'info');
+    }
+
+    // ==========================================
+    // 9. EVENTOS DE INTERFAZ Y DRAG & DROP
+    // ==========================================
+    function setupUIEvents() {
+      document.getElementById('file-input-welcome').addEventListener('change', (e) => {
+        loadGLBFile(e.target.files[0]);
+        e.target.value = '';
+      });
+      document.getElementById('file-input-header').addEventListener('change', (e) => {
+        loadGLBFile(e.target.files[0]);
+        e.target.value = '';
+      });
+
+      document.getElementById('btn-load-demo').addEventListener('click', loadDemoModel);
+
+      // Drag & Drop en toda la ventana
+      let dragCounter = 0;
+      window.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dragCounter++;
+        dropOverlay.classList.remove('hidden');
+      });
+      window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter <= 0) {
+          dragCounter = 0;
+          dropOverlay.classList.add('hidden');
+        }
+      });
+      window.addEventListener('dragover', (e) => e.preventDefault());
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        dropOverlay.classList.add('hidden');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          loadGLBFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      // Ficha de proyecto izquierda
+      const infoCard = document.getElementById('project-info-card');
+      document.getElementById('btn-info-card-toggle').addEventListener('click', () => {
+        infoCard.classList.toggle('hidden');
+      });
+      document.getElementById('btn-close-info-card').addEventListener('click', () => {
+        infoCard.classList.add('hidden');
+      });
+
+      // Presets de cámara
+      document.querySelectorAll('.cam-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          setCameraPreset(btn.dataset.camPreset);
+        });
+      });
+
+      // Copiar enlace (Compatibilidad iFrame / GitHub Pages)
+      document.getElementById('btn-share-link').addEventListener('click', () => {
+        const tempInput = document.createElement('input');
+        tempInput.value = window.location.href;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        try {
+          document.execCommand('copy');
+          showToast('Enlace de la página copiado al portapapeles', 'success');
+        } catch (err) {
+          showToast('No se pudo copiar el enlace automáticamente', 'error');
+        }
+        document.body.removeChild(tempInput);
+      });
+
+      document.getElementById('btn-center-camera').addEventListener('click', () => {
+        if (loadedModel) {
+          centerCameraView();
+        } else {
+          camera.position.set(18, 14, 18);
+          controls.target.set(0, 0, 0);
+          controls.update();
+        }
+      });
+
+      document.getElementById('btn-explode-toggle').addEventListener('click', toggleExplodedView);
+      document.getElementById('btn-explode-panel').addEventListener('click', toggleExplodedView);
+
+      document.getElementById('slider-explode-factor').addEventListener('input', (e) => {
+        explodeScaleMultiplier = parseFloat(e.target.value);
+        document.getElementById('val-explode-factor').textContent = `${explodeScaleMultiplier.toFixed(1)}x`;
+        if (explodeProgress > 0) {
+          applyExplodedPositions(explodeProgress);
+        }
+      });
+
+      const btnInspect = document.getElementById('btn-inspect-toggle');
+      btnInspect.addEventListener('click', () => {
+        inspectMode = !inspectMode;
+        const label = btnInspect.querySelector('span');
+        if (inspectMode) {
+          btnInspect.className = 'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors';
+          if (label) label.textContent = 'Inspector: ON';
+        } else {
+          clearSelection();
+          btnInspect.className = 'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors';
+          if (label) label.textContent = 'Inspector: OFF';
+        }
+      });
+
+      document.getElementById('btn-clear-selection').addEventListener('click', clearSelection);
+
+      document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+        const htmlEl = document.documentElement;
+        const isDark = htmlEl.classList.toggle('dark');
+        document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
+        document.getElementById('icon-moon').classList.toggle('hidden', isDark);
+      });
+
+      const controlsPanel = document.getElementById('controls-panel');
+      let panelVisible = true;
+      document.getElementById('btn-panel-toggle').addEventListener('click', () => {
+        panelVisible = !panelVisible;
+        controlsPanel.style.transform = panelVisible ? 'translateX(0)' : 'translateX(calc(100% + 1.5rem))';
+      });
+
+      ['slider-azimuth', 'slider-elevation', 'slider-intensity'].forEach((id) => {
+        document.getElementById(id).addEventListener('input', updateSunPosition);
+      });
+
+      document.getElementById('slider-env-intensity').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('val-env-intensity').textContent = val.toFixed(1);
+        scene.environmentIntensity = val;
+        if (loadedModel) {
+          loadedModel.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((m) => {
+                if (m && 'envMapIntensity' in m) {
+                  m.envMapIntensity = val;
+                  m.needsUpdate = true;
+                }
+              });
+            }
+          });
+        }
+      });
+
+      document.getElementById('slider-exposure').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('val-exposure').textContent = val.toFixed(2);
+        renderer.toneMappingExposure = val;
+      });
+
+      document.getElementById('btn-reset-sun').addEventListener('click', () => {
+        document.getElementById('slider-azimuth').value = 45;
+        document.getElementById('slider-elevation').value = 50;
+        document.getElementById('slider-intensity').value = 1.8;
+        document.getElementById('slider-env-intensity').value = 1.0;
+        document.getElementById('slider-exposure').value = 1.0;
+        document.getElementById('val-env-intensity').textContent = '1.0';
+        document.getElementById('val-exposure').textContent = '1.0';
+        scene.environmentIntensity = 1.0;
+        renderer.toneMappingExposure = 1.0;
+        updateSunPosition();
+      });
+
+      document.querySelectorAll('.render-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          clearSelection();
+          applyRenderMode(btn.dataset.renderMode);
+        });
+      });
+
+      document.getElementById('toggle-doubleside').addEventListener('change', (e) => {
+        const forceDouble = e.target.checked;
+        if (!loadedModel) return;
+        loadedModel.traverse((child) => {
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+              if (!m) return;
+              m.side = forceDouble ? THREE.DoubleSide : (originalSideMap.get(m) ?? THREE.FrontSide);
+              m.needsUpdate = true;
+            });
+          }
+        });
+      });
+
+      document.getElementById('toggle-grid').addEventListener('change', (e) => {
+        if (gridHelper) gridHelper.visible = e.target.checked;
+      });
+
+      document.getElementById('toggle-shadows').addEventListener('change', (e) => {
+        const enabled = e.target.checked;
+        renderer.shadowMap.enabled = enabled;
+        sunLight.castShadow = enabled;
+        if (loadedModel) {
+          loadedModel.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = enabled;
+              child.receiveShadow = enabled;
+            }
+          });
+        }
+        renderer.shadowMap.needsUpdate = true;
+      });
+
+      const bgPresets = {
+        dark: { color: 0x0b0f19, shadowOpacity: 0.35 },
+        sky: { color: 0xdbeafe, shadowOpacity: 0.22 },
+        white: { color: 0xf8fafc, shadowOpacity: 0.18 },
+      };
+
+      document.querySelectorAll('.bg-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const presetKey = btn.dataset.bg;
+          const preset = bgPresets[presetKey];
+          if (!preset) return;
+
+          scene.background = new THREE.Color(preset.color);
+          shadowCatcherPlane.material.opacity = preset.shadowOpacity;
+
+          document.querySelectorAll('.bg-preset-btn').forEach((b) => {
+            b.classList.remove('border-2', 'border-blue-500');
+            b.classList.add('border', 'border-slate-200', 'dark:border-slate-700');
+          });
+          btn.classList.remove('border', 'border-slate-200', 'dark:border-slate-700');
+          btn.classList.add('border-2', 'border-blue-500');
+        });
+      });
+    }
+
+    // ==========================================
+    // 10. REDIMENSIONADO Y BUCLE DE RENDER
+    // ==========================================
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    let lastFrameTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+      lastFrameTime = now;
+
+      if (Math.abs(explodeProgress - explodeTarget) > 0.0005) {
+        const speed = 1.25;
+        if (explodeProgress < explodeTarget) {
+          explodeProgress = Math.min(explodeTarget, explodeProgress + dt * speed);
+        } else {
+          explodeProgress = Math.max(explodeTarget, explodeProgress - dt * speed);
+        }
+        applyExplodedPositions(explodeProgress);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Iniciar aplicación e intentar carga automática desde GitHub Pages (./modelo.glb)
+    window.addEventListener('DOMContentLoaded', () => {
+      initScene();
+      setupUIEvents();
+      animate();
+
+      const isHttpProtocol = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+      if (isHttpProtocol) {
+        loadGLBFromURL(DEFAULT_REPO_MODEL_URL, 'modelo.glb', true);
+      } else {
+        welcomeModal.classList.remove('hidden');
+        welcomeModal.classList.add('flex');
+      }
+    });
+  </script>
+</body>
+</html>
